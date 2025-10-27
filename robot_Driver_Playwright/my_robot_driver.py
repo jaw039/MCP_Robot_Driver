@@ -15,6 +15,12 @@ import sys
 import time
 
 class RobotDriver:
+    """
+    Initialize the Robot Driver
+    
+    Args:
+        timeout (int): Default timeout for operations in milliseconds
+    """
     def __init__(self, timeout: int = 10000):
         self.playwright = None
         self.browser = None
@@ -23,8 +29,10 @@ class RobotDriver:
 
     def start_browser(self, headless: bool = False):
         """
-        Start Playwright and launch a Chromium browser.
-        Returns True on success, False on failure.
+        STEP 1: Start the browser
+        
+        Args:
+            headless (bool): Run browser in headless mode (no GUI)
         """
         try:
             print("Starting browser...")
@@ -51,6 +59,12 @@ class RobotDriver:
             return False
 
     def navigate_to_site(self, url):
+        """
+        STEP 2: Navigate to the target website
+        
+        Args:
+            url (str): The URL to navigate to
+        """
         try:
             print(f"Navigating to {url}")
             self.page.goto(url)
@@ -63,9 +77,54 @@ class RobotDriver:
             print(f"Error Navigating to site")
             return False
             
+    def login(self, username_option = 0, password_option = 0):
+        """
+        STEP 3: Perform login operation
+        
+        Args:
+            username_option (int): Index of username to select
+            password_option (int): Index of password to select
+        """
+        try:
+            print("Logging In...")
+            
+            # Click on Sign In
+            self.page.click('#signin', timeout=5000)
+            print("Clicked sign-in button")
+            
+            # Select username
+            self.page.get_by_text("Select Username").click(timeout=5000)
+            self.page.locator(f"#react-select-2-option-{username_option}-{username_option}").click(timeout=5000)
+            print("Selected username")
+            
+            # Select password
+            self.page.get_by_text("Select Password").click(timeout=5000)
+            self.page.locator(f"#react-select-3-option-{password_option}-{password_option}").click(timeout=5000)
+            print("Selected password")
+            
+            # Click Login Button
+            self.page.get_by_role("button", name="Log In").click(timeout=5000)
+            print("Clicked login button") 
+            
+            # Verify whether login is successful
+            if self.page.get_by_text("demouser").is_visible(timeout=5000):
+                print("Login successful!")
+                return True
+            else:
+                print("Login verification failed")
+                return False
+                
+        except PlaywrightError:
+            print("Login timeout: Element not found or page too slow")
+            return False
+        except Exception as e:
+            print(f"Error during login: {e}")
+            return False
 
     def close_browser(self):
-        """Close browser and stop Playwright if running."""
+        """
+        STEP 6: Clean up and close the browser
+        """
         try:
             if self.browser:
                 self.browser.close()
@@ -115,6 +174,10 @@ class RobotDriver:
                 result["error"] = "Failed to navigate to site"
                 return result
 
+            if not self.login():
+                result["error"] = "Failed to Login"
+                return result
+            
         except Exception as e:
             result["error"] = f"Unexpected error: {e}"
             return result
