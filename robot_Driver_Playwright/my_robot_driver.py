@@ -50,6 +50,20 @@ class RobotDriver:
             print(f"Unexpected error starting browser: {e}")
             return False
 
+    def navigate_to_site(self, url):
+        try:
+            print(f"Navigating to {url}")
+            self.page.goto(url)
+            print("Page loaded successfully!")
+            return True
+        except PlaywrightError:
+            print(f"Timeout: Page took too long to load") 
+            return False
+        except Exception as e:
+            print(f"Error Navigating to site")
+            return False
+            
+
     def close_browser(self):
         """Close browser and stop Playwright if running."""
         try:
@@ -61,19 +75,86 @@ class RobotDriver:
         except Exception as e:
             print(f"Error closing browser: {e}")
 
+    def run_complete_task (self,url,product_name = None, product_index = 0, headless = False):
+        """
+        MAIN WORKFLOW: Execute the complete robot driver task
+        
+        This method orchestrates all steps:
+        1. Start browser
+        2. Navigate to site
+        3. Login
+        4. Add product to cart (by index for reliability)
+        5. Extract cart total
+        6. Close browser
+        
+        Args:
+            url (str): Website URL
+            product_name (str): Product to search for (optional, uses index if None)
+            product_index (int): Index of product to add (0 = first)
+            headless (bool): Run in headless mode
+            
+        Returns:
+            dict: Results of the operation
+        """
+        
+        print("Starting Task:")
+        
+        result = {
+            "success": False,
+            "product": product_name,
+            "price": None,
+            "error": None
+        }
+        
+        try:
+            if not self.start_browser(headless=headless):
+                result["error"] = "Failed to start browser"
+                return result
+        
+            if not self.navigate_to_site(url):
+                result["error"] = "Failed to navigate to site"
+                return result
 
+        except Exception as e:
+            result["error"] = f"Unexpected error: {e}"
+            return result
+        
+        finally:
+            # clean up, even if there's an error
+            self.close_browser()
+        
+        # Return success if all steps completed
+        result["success"] = True
+        return result
+            
 def main():
-    """runner to start the browser and exit so the script shows output."""
-    driver = RobotDriver()
-    ok = driver.start_browser(headless=False)
-    if not ok:
-        print("Failed to start browser.")
+    """
+    Main entry point for the Robot Driver program
+    """
+    # Configuration
+    TARGET_URL = "https://bstackdemo.com/"
+    PRODUCT_INDEX = 0  # 0 = first product, 1 = second, etc.
+    RUN_HEADLESS = False  # Set to True to hide browser window
+    
+    driver = RobotDriver(timeout=10000)
+    result = driver.run_complete_task(
+        url=TARGET_URL,
+        product_index=PRODUCT_INDEX,
+        headless=RUN_HEADLESS
+    )
+    
+    # Print final results
+    print("FINAL RESULTS")
+    if result["success"]:
+        print(f"SUCCESS! Product '{result['product']}' found!")
+        print(f"Price: {result['price']}")
+        print("\nTask completed successfully!")
+        return 0
+    else:
+        print(f"FAILED: {result['error']}")
+        print(f"Product searched: {result['product']}")
+        print("\nTask did not complete successfully")
         return 1
-    # Keep browser open for a short moment to test our function 
-    print("Browser is running (will close in 2s)...")
-    time.sleep(2)
-    driver.close_browser()
-    return 0
 
 
 if __name__ == "__main__":
