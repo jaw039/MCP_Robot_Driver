@@ -1,0 +1,25 @@
+# IDE and editor files
+.vscode/
+.idea/
+*.pyc
+__pycache__/
+*.egg-info/
+.DS_Store
+
+# Python
+venv/
+env/
+*.egg
+
+# Test files
+.pytest_cache/
+.coverage
+
+# BrowserStack specific
+BrowserStack.py
+PLAYWRIGHT_CHEATSHEET.md
+PROJECT_GUIDE.md
+QUICK_START.md
+SUMMARY.md
+TUTORIAL.md
+README.md
