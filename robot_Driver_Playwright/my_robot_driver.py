@@ -121,6 +121,117 @@ class RobotDriver:
             print(f"Error during login: {e}")
             return False
 
+    def search_product(self, product_name):
+        """
+        STEP 4: Search for a specific product
+        
+        Args:
+            product_name (str): Name of the product to search for
+        """
+        try: 
+            print(f"Searching for product: {product_name}...")
+            
+            # Wait for our product to load
+            self.page.wait_for_selector('.shelf-item', timeout = 5000)
+            
+            # Find Our Product
+            product_locator = self.page.locator(f".shelf-item:has-text('{product_name}')").first
+            
+            if product_locator.is_visible(timeout=5000):
+                # Get the actual product name
+                actual_name = product_locator.locator('.shelf-item__title').inner_text()
+                print(f"Found product: {actual_name}")
+                product_locator.click(timeout=5000)
+                print(f"Clicked on product")
+                return True
+            else:
+                print(f"Product containing '{product_name}' not found on page")
+                return False
+                
+        except PlaywrightError:
+            print(f"Timeout: Could not find product '{product_name}")
+            return False
+        
+        except Exception as e:
+            print(f"Error searching for product: {e}")
+            return False
+
+    def add_to_cart_by_index(self, product_index=0):
+        """
+        STEP 4: Add a product to cart by index
+        
+        Args:
+            product_index (int): Index of product to add (0 = first product)
+            
+        Returns:
+            tuple: (success: bool, product_name: str)
+        """
+        try:
+            print(f"Adding product #{product_index + 1} to cart...")
+            
+            # Wait for products to load
+            self.page.wait_for_selector('.shelf-item', timeout=5000)
+            
+            # Get all products
+            products = self.page.locator('.shelf-item').all()
+            
+            if product_index < len(products):
+                product = products[product_index]
+                
+                # Get product name
+                product_name = product.locator('.shelf-item__title').inner_text()
+                print(f"Selected: {product_name}")
+                
+                # Click "Add to cart" button
+                add_button = product.locator('.shelf-item__buy-btn')
+                add_button.click(timeout=5000)
+                print(f"Added to cart!")
+                
+                # Wait a moment for cart to update
+                self.page.wait_for_timeout(1000)
+                
+                return True, product_name
+            else:
+                print(f"Product index {product_index} out of range (only {len(products)} products)")
+                return False, None
+                
+        except PlaywrightError:
+            print(f"Timeout: Could not add product to cart")
+            return False, None
+        except Exception as e:
+            print(f"Error adding to cart: {e}")
+            return False, None
+
+    def get_cart_total(self):
+        """
+        STEP 5: Get the cart total price
+        
+        Returns:
+            str: The cart total or None if not found
+        """
+        try:
+            print("Getting cart total...")
+            
+            # Click on cart to view total
+            self.page.click('.float-cart__content', timeout=5000)
+            
+            # Wait for cart to open
+            self.page.wait_for_selector('.sub-price__val', timeout=5000)
+            
+            # Get the total
+            total_element = self.page.locator('.sub-price__val').first
+            total = total_element.inner_text(timeout=5000)
+            
+            print(f"Cart total: {total}")
+            return total
+            
+        except PlaywrightError:
+            print("Timeout: Cart total not found")
+            return None
+        except Exception as e:
+            print(f"Error getting cart total: {e}")
+            return None
+    
     def close_browser(self):
         """
         STEP 6: Clean up and close the browser
@@ -178,6 +289,21 @@ class RobotDriver:
                 result["error"] = "Failed to Login"
                 return result
             
+            # Use index-based approach for reliability
+            success, actual_product_name = self.add_to_cart_by_index(product_index)
+            if not success:
+                result["error"] = f"Failed to add product to cart"
+                return result
+            
+            result["product"] = actual_product_name
+            
+            # Get cart total
+            price = self.get_cart_total()
+            if price:
+                result["success"] = True
+                result["price"] = price
+            else:
+                result["error"] = "Failed to extract cart total"
         except Exception as e:
             result["error"] = f"Unexpected error: {e}"
             return result
