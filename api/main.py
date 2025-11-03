@@ -1,10 +1,7 @@
-import sys
-from pathlib import Path
 from time import perf_counter
 from typing import Any, Literal
 
-# Add parent directory to path to import robot drivers
-sys.path.append(str(Path(__file__).parent.parent))
+from fastapi import FastAPI
 
 from fastapi import FastAPI
 from pydantic import BaseModel

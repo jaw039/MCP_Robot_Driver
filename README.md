@@ -103,10 +103,9 @@ python robot_Driver_Playwright/my_robot_driver.py --show-browser
 
 The API provides network-accessible endpoints for automation tasks.
 
-1. Start the API server:
+1. Start the API server from the project root:
 ```bash
-cd api
-python -m uvicorn main:app --reload --port 8000
+python -m uvicorn api.main:app --reload --port 8000
 ```
 
 The server will start at `http://localhost:8000`
