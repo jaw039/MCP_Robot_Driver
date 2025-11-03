@@ -1,349 +1,383 @@
-"""
-ROBOT DRIVER - CORE FOUNDATIONAL SKILLS DEMONSTRATION
-======================================================
-This program demonstrates:
-1. Browser automation using Playwright
-2. Proper error handling
-3. Reliable web interactions
-4. Clear output reporting
+"""Core robot driver for Challenge 1 requirements."""
 
-Task: Log in to BrowserStack demo, search for a product, and report its price
-"""
+from __future__ import annotations
 
-from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightError
+import argparse
 import sys
-import time
+from contextlib import suppress
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional, Tuple
+
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
+from playwright.sync_api import sync_playwright
+
+
+PRODUCT_CARD_SELECTOR = ".shelf-item"
+PRODUCT_TITLE_SELECTOR = ".shelf-item__title"
+PRODUCT_PRICE_SELECTOR = ".shelf-item__price .val"
+
+SIGN_IN_BUTTON_SELECTOR = "#signin"
+USERNAME_MENU_TEXT = "Select Username"
+PASSWORD_MENU_TEXT = "Select Password"
+USERNAME_OPTION_PREFIX = "react-select-2-option"
+PASSWORD_OPTION_PREFIX = "react-select-3-option"
+
+STRATEGY_MATCH = "match"
+STRATEGY_MIN_PRICE = "min_price"
+STRATEGY_MAX_PRICE = "max_price"
+ALLOWED_STRATEGIES = [STRATEGY_MATCH, STRATEGY_MIN_PRICE, STRATEGY_MAX_PRICE]
+
+
+@dataclass
+class RobotDriverResult:
+    """Represents the outcome of a robot driver run."""
+
+    requested_product: str
+    matched_product: Optional[str]
+    price: Optional[str]
+    success: bool
+    selection_strategy: str
+    error: Optional[str] = None
+
 
 class RobotDriver:
-    """
-    Initialize the Robot Driver
-    
-    Args:
-        timeout (int): Default timeout for operations in milliseconds
-    """
-    def __init__(self, timeout: int = 10000):
-        self.playwright = None
-        self.browser = None
-        self.page = None
-        self.timeout = timeout
+    """Encapsulates the BrowserStack demo automation logic."""
 
-    def start_browser(self, headless: bool = False):
-        """
-        STEP 1: Start the browser
-        
-        Args:
-            headless (bool): Run browser in headless mode (no GUI)
-        """
+    def __init__(self, timeout_ms: int = 10_000) -> None:
+        self.timeout_ms = timeout_ms
+        self._playwright = None
+        self._browser = None
+        self.page = None
+
+    # ------------------------------------------------------------------
+    # Browser lifecycle helpers
+    # ------------------------------------------------------------------
+    def _start_browser(self, headless: bool) -> bool:
         try:
             print("Starting browser...")
-            self.playwright = sync_playwright().start()
-
-            # Use the Playwright chromium 
-            self.browser = self.playwright.chromium.launch(headless=headless)
-            self.page = self.browser.new_page()
-            # apply default timeout for operations
-            try:
-                self.page.set_default_timeout(self.timeout)
-            except Exception:
-                # Some older Playwright versions may not have this method; ignore safely
-                pass
-
-            print("Browser started successfully!")
+            self._playwright = sync_playwright().start()
+            self._browser = self._playwright.chromium.launch(headless=headless)
+            self.page = self._browser.new_page()
+            with suppress(Exception):
+                self.page.set_default_timeout(self.timeout_ms)
+            print("Browser started successfully.")
             return True
+        except PlaywrightTimeoutError as exc:
+            print(f"Playwright timeout while starting browser: {exc}")
+        except Exception as exc:  # noqa: BLE001 - provide user friendly message
+            print(f"Unexpected error starting browser: {exc}")
+        return False
 
-        except PlaywrightError as e:
-            print(f"Playwright error starting browser: {e}")
-            return False
-        except Exception as e:
-            print(f"Unexpected error starting browser: {e}")
-            return False
+    def _close_browser(self) -> None:
+        with suppress(Exception):
+            if self._browser:
+                self._browser.close()
+        with suppress(Exception):
+            if self._playwright:
+                self._playwright.stop()
+        print("Browser closed")
 
-    def navigate_to_site(self, url):
-        """
-        STEP 2: Navigate to the target website
-        
-        Args:
-            url (str): The URL to navigate to
-        """
+    # ------------------------------------------------------------------
+    # Core automation steps
+    # ------------------------------------------------------------------
+    def _navigate(self, url: str) -> bool:
         try:
             print(f"Navigating to {url}")
-            self.page.goto(url)
-            print("Page loaded successfully!")
+            self.page.goto(url, wait_until="networkidle")
+            print("Page loaded successfully.")
             return True
-        except PlaywrightError:
-            print(f"Timeout: Page took too long to load") 
-            return False
-        except Exception as e:
-            print(f"Error Navigating to site")
-            return False
-            
-    def login(self, username_option = 0, password_option = 0):
-        """
-        STEP 3: Perform login operation
-        
-        Args:
-            username_option (int): Index of username to select
-            password_option (int): Index of password to select
-        """
+        except PlaywrightTimeoutError:
+            print("Timeout: page took too long to load")
+        except Exception as exc:  # noqa: BLE001
+            print(f"Error navigating to site: {exc}")
+        return False
+
+    def _login(self, username_index: int, password_index: int) -> bool:
         try:
-            print("Logging In...")
-            
-            # Click on Sign In
-            self.page.click('#signin', timeout=5000)
-            print("Clicked sign-in button")
-            
-            # Select username
-            self.page.get_by_text("Select Username").click(timeout=5000)
-            self.page.locator(f"#react-select-2-option-{username_option}-{username_option}").click(timeout=5000)
-            print("Selected username")
-            
-            # Select password
-            self.page.get_by_text("Select Password").click(timeout=5000)
-            self.page.locator(f"#react-select-3-option-{password_option}-{password_option}").click(timeout=5000)
-            print("Selected password")
-            
-            # Click Login Button
-            self.page.get_by_role("button", name="Log In").click(timeout=5000)
-            print("Clicked login button") 
-            
-            # Verify whether login is successful
-            if self.page.get_by_text("demouser").is_visible(timeout=5000):
-                print("Login successful!")
+            print("Logging in...")
+            self.page.click(SIGN_IN_BUTTON_SELECTOR, timeout=5_000)
+            self._select_drop_down_option(USERNAME_MENU_TEXT, USERNAME_OPTION_PREFIX, username_index)
+            self._select_drop_down_option(PASSWORD_MENU_TEXT, PASSWORD_OPTION_PREFIX, password_index)
+            self.page.get_by_role("button", name="Log In").click(timeout=5_000)
+            if self.page.get_by_text("demouser").is_visible(timeout=5_000):
+                print("Login successful.")
                 return True
-            else:
-                print("Login verification failed")
-                return False
-                
-        except PlaywrightError:
-            print("Login timeout: Element not found or page too slow")
-            return False
-        except Exception as e:
-            print(f"Error during login: {e}")
-            return False
+            print("Login verification failed")
+        except PlaywrightTimeoutError:
+            print("Login timeout: element not found or page too slow")
+        except Exception as exc:  # noqa: BLE001
+            print(f"Error during login: {exc}")
+        return False
 
-    def search_product(self, product_name):
-        """
-        STEP 4: Search for a specific product
-        
-        Args:
-            product_name (str): Name of the product to search for
-        """
-        try: 
-            print(f"Searching for product: {product_name}...")
-            
-            # Wait for our product to load
-            self.page.wait_for_selector('.shelf-item', timeout = 5000)
-            
-            # Find Our Product
-            product_locator = self.page.locator(f".shelf-item:has-text('{product_name}')").first
-            
-            if product_locator.is_visible(timeout=5000):
-                # Get the actual product name
-                actual_name = product_locator.locator('.shelf-item__title').inner_text()
-                print(f"Found product: {actual_name}")
-                product_locator.click(timeout=5000)
-                print(f"Clicked on product")
-                return True
-            else:
-                print(f"Product containing '{product_name}' not found on page")
-                return False
-                
-        except PlaywrightError:
-            print(f"Timeout: Could not find product '{product_name}")
-            return False
-        
-        except Exception as e:
-            print(f"Error searching for product: {e}")
-            return False
+    def _select_drop_down_option(self, menu_text: str, option_prefix: str, option_index: int) -> None:
+        menu = self.page.get_by_text(menu_text)
+        menu.click(timeout=5_000)
+        option_selector = f"#{option_prefix}-{option_index}-{option_index}"
+        self.page.locator(option_selector).click(timeout=5_000)
 
-    def add_to_cart_by_index(self, product_index=0):
-        """
-        STEP 4: Add a product to cart by index
-        
-        Args:
-            product_index (int): Index of product to add (0 = first product)
-            
-        Returns:
-            tuple: (success: bool, product_name: str)
-        """
+    def _locate_product(
+        self,
+        product_name: str,
+        strategy: str,
+    ) -> Tuple[bool, Optional[str], Optional[str]]:
         try:
-            print(f"Adding product #{product_index + 1} to cart...")
-            
-            # Wait for products to load
-            self.page.wait_for_selector('.shelf-item', timeout=5000)
-            
-            # Get all products
-            products = self.page.locator('.shelf-item').all()
-            
-            if product_index < len(products):
-                product = products[product_index]
-                
-                # Get product name
-                product_name = product.locator('.shelf-item__title').inner_text()
-                print(f"Selected: {product_name}")
-                
-                # Click "Add to cart" button
-                add_button = product.locator('.shelf-item__buy-btn')
-                add_button.click(timeout=5000)
-                print(f"Added to cart!")
-                
-                # Wait a moment for cart to update
-                self.page.wait_for_timeout(1000)
-                
-                return True, product_name
-            else:
-                print(f"Product index {product_index} out of range (only {len(products)} products)")
-                return False, None
-                
-        except PlaywrightError:
-            print(f"Timeout: Could not add product to cart")
-            return False, None
-        except Exception as e:
-            print(f"Error adding to cart: {e}")
-            return False, None
+            print(f"Searching for product: {product_name} (strategy: {strategy})")
+            self.page.wait_for_selector(PRODUCT_CARD_SELECTOR, timeout=10_000)
+            entries = self._collect_catalog_entries()
+            if not entries:
+                print("No products found on the page")
+                return False, None, "Price not available"
 
-    def get_cart_total(self):
-        """
-        STEP 5: Get the cart total price
-        
-        Returns:
-            str: The cart total or None if not found
-        """
+            if strategy == STRATEGY_MAX_PRICE:
+                return self._select_by_price(entries, product_name, max)
+            if strategy == STRATEGY_MIN_PRICE:
+                return self._select_by_price(entries, product_name, min)
+            return self._select_by_name(entries, product_name)
+        except PlaywrightTimeoutError:
+            print("Timeout waiting for products to load")
+            return False, None, "Timed out waiting for products"
+        except Exception as exc:  # noqa: BLE001
+            print(f"Error searching for product: {exc}")
+            return False, None, "Error occurred"
+
+    def _collect_catalog_entries(self) -> List[dict]:
+        entries: List[dict] = []
+        cards = self.page.locator(PRODUCT_CARD_SELECTOR)
+        total_cards = cards.count()
+        for index in range(total_cards):
+            card = cards.nth(index)
+            try:
+                title = card.locator(PRODUCT_TITLE_SELECTOR).inner_text().strip()
+            except Exception:
+                continue
+
+            price_text = self._extract_price(card)
+            price_value = self._parse_price(price_text)
+            entries.append(
+                {
+                    "title": title,
+                    "price_text": price_text,
+                    "price_value": price_value,
+                }
+            )
+        return entries
+
+    def _select_by_price(
+        self,
+        entries: List[dict],
+        product_name: str,
+        reducer,
+    ) -> Tuple[bool, Optional[str], Optional[str]]:
+        keyword = product_name.strip().lower()
+        filtered = [entry for entry in entries if keyword and keyword in entry["title"].lower()]
+        target_pool = filtered or entries
+        target_pool = [entry for entry in target_pool if entry["price_value"] is not None]
+
+        if not target_pool:
+            print("Unable to determine product prices from catalog")
+            return False, None, "Price not available"
+
+        selected = reducer(target_pool, key=lambda entry: entry["price_value"])
+        print(
+            f"Selected product by price: {selected['title']} at {selected['price_text']}"
+        )
+        return True, selected["title"], selected["price_text"]
+
+    def _select_by_name(
+        self,
+        entries: List[dict],
+        product_name: str,
+    ) -> Tuple[bool, Optional[str], Optional[str]]:
+        normalized_target = product_name.strip().lower()
+        best_partial: Optional[Tuple[str, str]] = None
+
+        for index, entry in enumerate(entries):
+            title = entry["title"]
+            price_text = entry["price_text"]
+            normalized_title = title.lower().strip()
+            print(f"Checking product {index + 1}: '{title}'")
+
+            if normalized_title == normalized_target:
+                return True, title, price_text
+
+            if normalized_target and normalized_target in normalized_title and best_partial is None:
+                best_partial = (title, price_text)
+
+        if best_partial:
+            match_title, match_price = best_partial
+            print(f"Using closest match: {match_title}")
+            return True, match_title, match_price
+
+        print(f"Product '{product_name}' not found")
+        return False, None, "Product not found"
+
+    def _extract_price(self, card) -> str:
         try:
-            print("Getting cart total...")
-            
-            # Click on cart to view total
-            self.page.click('.float-cart__content', timeout=5000)
-            
-            # Wait for cart to open
-            self.page.wait_for_selector('.sub-price__val', timeout=5000)
-            
-            # Get the total
-            total_element = self.page.locator('.sub-price__val').first
-            total = total_element.inner_text(timeout=5000)
-            
-            print(f"Cart total: {total}")
-            return total
-            
-        except PlaywrightError:
-            print("Timeout: Cart total not found")
+            price_text = card.locator(PRODUCT_PRICE_SELECTOR).inner_text().strip()
+            if price_text:
+                print(f"Product price: {price_text}")
+                return price_text
+        except Exception:
+            pass
+        return "Price not available"
+
+    @staticmethod
+    def _parse_price(price_text: str) -> Optional[float]:
+        if not price_text or price_text == "Price not available":
             return None
-        except Exception as e:
-            print(f"Error getting cart total: {e}")
+        stripped = price_text.replace("$", "").replace(",", "").strip()
+        try:
+            return float(stripped)
+        except ValueError:
             return None
-    
-    def close_browser(self):
-        """
-        STEP 6: Clean up and close the browser
-        """
-        try:
-            if self.browser:
-                self.browser.close()
-            if self.playwright:
-                self.playwright.stop()
-            print("Browser closed")
-        except Exception as e:
-            print(f"Error closing browser: {e}")
 
-    def run_complete_task (self,url,product_name = None, product_index = 0, headless = False):
-        """
-        MAIN WORKFLOW: Execute the complete robot driver task
-        
-        This method orchestrates all steps:
-        1. Start browser
-        2. Navigate to site
-        3. Login
-        4. Add product to cart (by index for reliability)
-        5. Extract cart total
-        6. Close browser
-        
-        Args:
-            url (str): Website URL
-            product_name (str): Product to search for (optional, uses index if None)
-            product_index (int): Index of product to add (0 = first)
-            headless (bool): Run in headless mode
-            
-        Returns:
-            dict: Results of the operation
-        """
-        
-        print("Starting Task:")
-        
-        result = {
-            "success": False,
-            "product": product_name,
-            "price": None,
-            "error": None
-        }
-        
-        try:
-            if not self.start_browser(headless=headless):
-                result["error"] = "Failed to start browser"
-                return result
-        
-            if not self.navigate_to_site(url):
-                result["error"] = "Failed to navigate to site"
-                return result
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+    def collect_catalog_snapshot(
+        self,
+        url: str,
+        *,
+        headless: bool = True,
+        username_index: int = 0,
+        password_index: int = 0,
+    ) -> List[Dict[str, Any]]:
+        """Gather the current product catalog without making a selection."""
 
-            if not self.login():
-                result["error"] = "Failed to Login"
-                return result
-            
-            # Use index-based approach for reliability
-            success, actual_product_name = self.add_to_cart_by_index(product_index)
-            if not success:
-                result["error"] = f"Failed to add product to cart"
-                return result
-            
-            result["product"] = actual_product_name
-            
-            # Get cart total
-            price = self.get_cart_total()
-            if price:
-                result["success"] = True
-                result["price"] = price
-            else:
-                result["error"] = "Failed to extract cart total"
-        except Exception as e:
-            result["error"] = f"Unexpected error: {e}"
-            return result
-        
+        print("Collecting catalog snapshot for AI planning")
+
+        if not self._start_browser(headless=headless):
+            raise RuntimeError("Failed to start Playwright while gathering catalog snapshot")
+
+        try:
+            if not self._navigate(url):
+                raise RuntimeError("Navigation failed during catalog snapshot")
+
+            if not self._login(username_index=username_index, password_index=password_index):
+                raise RuntimeError("Login failed during catalog snapshot")
+
+            self.page.wait_for_selector(PRODUCT_CARD_SELECTOR, timeout=10_000)
+            entries = self._collect_catalog_entries()
+            return entries
         finally:
-            # clean up, even if there's an error
-            self.close_browser()
-        
-        # Return success if all steps completed
-        result["success"] = True
-        return result
-            
-def main():
-    """
-    Main entry point for the Robot Driver program
-    """
-    # Configuration
-    TARGET_URL = "https://bstackdemo.com/"
-    PRODUCT_INDEX = 0  # 0 = first product, 1 = second, etc.
-    RUN_HEADLESS = False  # Set to True to hide browser window
-    
-    driver = RobotDriver(timeout=10000)
-    result = driver.run_complete_task(
-        url=TARGET_URL,
-        product_index=PRODUCT_INDEX,
-        headless=RUN_HEADLESS
+            self._close_browser()
+
+    def run_complete_task(
+        self,
+        url: str,
+        product_name: str = "iPhone 12",
+        *,
+        headless: bool = True,
+        username_index: int = 0,
+        password_index: int = 0,
+        selection_strategy: str = STRATEGY_MATCH,
+    ) -> RobotDriverResult:
+        print("Starting Robot Driver Task")
+        print(f"Target: {product_name}")
+
+        if selection_strategy not in ALLOWED_STRATEGIES:
+            raise ValueError(
+                f"Unsupported selection strategy '{selection_strategy}'. "
+                f"Choose from {ALLOWED_STRATEGIES}."
+            )
+
+        if not self._start_browser(headless=headless):
+            return RobotDriverResult(
+                requested_product=product_name,
+                matched_product=None,
+                price=None,
+                success=False,
+                selection_strategy=selection_strategy,
+                error="Failed to start browser",
+            )
+
+        try:
+            if not self._navigate(url):
+                return RobotDriverResult(
+                    requested_product=product_name,
+                    matched_product=None,
+                    price=None,
+                    success=False,
+                    selection_strategy=selection_strategy,
+                    error="Failed to navigate to site",
+                )
+
+            if not self._login(username_index=username_index, password_index=password_index):
+                return RobotDriverResult(
+                    requested_product=product_name,
+                    matched_product=None,
+                    price=None,
+                    success=False,
+                    selection_strategy=selection_strategy,
+                    error="Failed to login",
+                )
+
+            found, matched_name, price = self._locate_product(
+                product_name,
+                strategy=selection_strategy,
+            )
+            if not found or not price or price == "Price not available":
+                return RobotDriverResult(
+                    requested_product=product_name,
+                    matched_product=matched_name,
+                    price=price if price != "Price not available" else None,
+                    success=False,
+                    selection_strategy=selection_strategy,
+                    error="Failed to extract product price",
+                )
+
+            print(f"SUCCESS! Found {matched_name} - Price: {price}")
+            return RobotDriverResult(
+                requested_product=product_name,
+                matched_product=matched_name,
+                price=price,
+                success=True,
+                selection_strategy=selection_strategy,
+            )
+        finally:
+            self._close_browser()
+
+
+def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Run the Robot Driver core task")
+    parser.add_argument("--product", default="iPhone 12", help="Product name or keyword to search for")
+    parser.add_argument("--url", default="https://bstackdemo.com/", help="Target site URL")
+    parser.add_argument("--headless", dest="headless", action="store_true", help="Run browser in headless mode")
+    parser.add_argument("--show-browser", dest="headless", action="store_false", help="Display the browser window")
+    parser.set_defaults(headless=True)
+    parser.add_argument(
+        "--strategy",
+        choices=ALLOWED_STRATEGIES,
+        default=STRATEGY_MATCH,
+        help="Product selection strategy",
     )
-    
-    # Print final results
-    print("FINAL RESULTS")
-    if result["success"]:
-        print(f"SUCCESS! Product '{result['product']}' found!")
-        print(f"Price: {result['price']}")
-        print("\nTask completed successfully!")
+    parser.add_argument("--timeout", type=int, default=10_000, help="Default timeout in milliseconds")
+    return parser.parse_args(argv)
+
+
+def main(argv: Optional[list[str]] = None) -> int:
+    args = parse_args(argv)
+    driver = RobotDriver(timeout_ms=args.timeout)
+    result = driver.run_complete_task(
+        url=args.url,
+        product_name=args.product,
+        headless=args.headless,
+        selection_strategy=args.strategy,
+    )
+
+    print("\nFINAL RESULTS")
+    print("-" * 50)
+    if result.success:
+        print(f"SUCCESS! Product '{result.matched_product or result.requested_product}' found.")
+        print(f"Price: {result.price}")
+        print("\nTask completed successfully.")
         return 0
-    else:
-        print(f"FAILED: {result['error']}")
-        print(f"Product searched: {result['product']}")
-        print("\nTask did not complete successfully")
-        return 1
+
+    print(f"FAILED: {result.error}")
+    print(f"Product searched: {result.requested_product}")
+    print(f"Strategy used: {result.selection_strategy}")
+    print("\nTask did not complete successfully.")
+    return 1
 
 
 if __name__ == "__main__":
