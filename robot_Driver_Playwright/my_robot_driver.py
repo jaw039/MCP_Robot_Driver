@@ -6,7 +6,7 @@ import argparse
 import sys
 from contextlib import suppress
 from dataclasses import dataclass
-from typing import List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from playwright.sync_api import sync_playwright
@@ -234,6 +234,34 @@ class RobotDriver:
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
+    def collect_catalog_snapshot(
+        self,
+        url: str,
+        *,
+        headless: bool = True,
+        username_index: int = 0,
+        password_index: int = 0,
+    ) -> List[Dict[str, Any]]:
+        """Gather the current product catalog without making a selection."""
+
+        print("Collecting catalog snapshot for AI planning")
+
+        if not self._start_browser(headless=headless):
+            raise RuntimeError("Failed to start Playwright while gathering catalog snapshot")
+
+        try:
+            if not self._navigate(url):
+                raise RuntimeError("Navigation failed during catalog snapshot")
+
+            if not self._login(username_index=username_index, password_index=password_index):
+                raise RuntimeError("Login failed during catalog snapshot")
+
+            self.page.wait_for_selector(PRODUCT_CARD_SELECTOR, timeout=10_000)
+            entries = self._collect_catalog_entries()
+            return entries
+        finally:
+            self._close_browser()
+
     def run_complete_task(
         self,
         url: str,

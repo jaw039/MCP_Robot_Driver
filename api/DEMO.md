@@ -1,13 +1,13 @@
 # Challenge 2 Demo: Network-Accessible Robot Driver
 
-## 🎯 What This Demonstrates
+## What This Demonstrates
 
-✅ **Web Access:** FastAPI creates web access points  
-✅ **Launch Link:** Specific endpoints to start automation remotely  
-✅ **Easy Setup:** Clear instructions + requirements.txt  
-✅ **Network Service:** Turn Core program into API  
+- Web access: FastAPI creates browser-triggerable endpoints  
+- Launch links: Specific routes start automation remotely  
+- Easy setup: Clear instructions plus `requirements.txt`  
+- Network service: Core program exposed as an API  
 
-## 🚀 How to Run the Demo
+## How to Run the Demo
 
 ### Step 1: Install Dependencies
 ```bash
@@ -46,7 +46,7 @@ curl -X POST "http://localhost:8000/run-ai" \
 python api/test_api.py
 ```
 
-## 🌐 API Endpoints Created
+## API Endpoints Created
 
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
@@ -55,7 +55,7 @@ python api/test_api.py
 | `/run-ai` | POST | Execute AI-guided automation |
 | `/docs` | GET | Interactive API documentation |
 
-## 📨 Example API Calls
+## Example API Calls
 
 ### Basic Automation Request
 ```json
@@ -80,15 +80,15 @@ POST /run-basic
 }
 ```
 
-## 🏆 Challenge 2 Requirements Met
+## Challenge 2 Requirements Met
 
-✅ **Goal:** Turn Core program into network-accessible service  
-✅ **Web Access:** FastAPI provides HTTP endpoints  
-✅ **Launch Link:** `/run-basic` and `/run-ai` endpoints  
-✅ **Easy Setup:** `requirements.txt` + clear instructions  
-✅ **Remote Automation:** Send HTTP requests to trigger browser automation  
+- Goal: Turn core program into a network-accessible service  
+- Web access: FastAPI provides HTTP endpoints  
+- Launch links: `/run-basic` and `/run-ai` endpoints  
+- Easy setup: `requirements.txt` plus clear instructions  
+- Remote automation: Send HTTP requests to trigger browser automation  
 
-## 🔧 Deployment Ready
+## Deployment Ready
 
 This API can be deployed to cloud platforms:
 

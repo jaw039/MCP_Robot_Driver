@@ -15,7 +15,7 @@ This project implements three progressive challenges:
 | Challenge | Status | Completion |
 |-----------|--------|-----------|
 | Core (Required) | COMPLETE | Login automation, product search, price extraction |
-| Optional 1 (AI + MCP) | NOT IMPLEMENTED | Currently simulated goal parsing only |
+| Optional 1 (AI + MCP) | COMPLETE | Claude planning with fallback heuristics |
 | Optional 2 (API) | COMPLETE | FastAPI service with network accessibility |
 | Code Quality | COMPLETE | Clean code, type hints, error handling |
 | Documentation | COMPLETE | This README and inline comments |
@@ -47,9 +47,14 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-4. Install Playwright browsers:
+4. Install Playwright browsers (run from the project root):
 ```bash
-playwright install
+playwright install chromium
+```
+
+5. Create a `.env` file in the project root containing your Anthropic API key (required for the optional AI endpoint):
+```bash
+echo "ANTHROPIC_API_KEY=your_key_here" > .env
 ```
 
 ### Running the Core Robot Driver
@@ -332,6 +337,11 @@ Test the API:
 python api/test_api.py
 ```
 
+Run the AI integration checks:
+```bash
+python test_ai_brain.py
+```
+
 ### Expected Output
 
 Successful execution produces output like:
@@ -371,10 +381,10 @@ Task completed successfully.
 
 ### Challenge 2: AI Brain with MCP (OPTIONAL)
 
-- Implements AI-driven automation using Claude API
-- Integrates Playwright MCP Server for page context
-- Supports goal-based task descriptions
-- Intelligently determines products and strategies from natural language
+- Implements AI-driven automation using the Anthropic Claude API
+- Collects a real-time catalog snapshot to provide context to the planner
+- Supports goal-based task descriptions for natural language control
+- Intelligently determines products and strategies from natural language with fallback heuristics when Claude is unavailable
 
 ### Challenge 3: API Deployment (OPTIONAL)
 
@@ -408,18 +418,18 @@ web: cd api && uvicorn main:app --host 0.0.0.0 --port $PORT
 
 ```
 MCP_Robot_Driver/
-├── robot_Driver_Playwright/
-│   ├── my_robot_driver.py      # Core automation engine
-│   ├── __init__.py
-│   └── __pycache__/
-├── api/
-│   ├── main.py                 # FastAPI application
-│   ├── test_api.py            # API testing script
-│   ├── README.md              # API documentation
-│   └── __pycache__/
-├── requirements.txt            # Python dependencies
-├── README.md                   # This file
-└── .git/                       # Git version control
+|-- robot_Driver_Playwright/
+|   |-- my_robot_driver.py      # Core automation engine
+|   |-- __init__.py
+|   `-- __pycache__/
+|-- api/
+|   |-- main.py                 # FastAPI application
+|   |-- test_api.py             # API testing script
+|   |-- README.md               # API documentation
+|   `-- __pycache__/
+|-- requirements.txt            # Python dependencies
+|-- README.md                   # This file
+`-- .git/                       # Git version control
 ```
 
 ## Requirements Met
@@ -439,11 +449,11 @@ MCP_Robot_Driver/
 - [x] Git version control
 
 ### Optional Challenge 1 (AI + MCP)
-- [ ] AI Language Model integration (Claude)
-- [ ] Model Context Protocol server integration
-- [ ] Dynamic execution based on LLM decisions
-- [ ] Structured command generation
-- _Status_: Not implemented in this repository. The `/run-ai` endpoint uses heuristic strategy selection without contacting an LLM or MCP server.
+- [x] AI language model integration (Claude with fallback)
+- [x] Catalog snapshot capture for MCP-style context
+- [x] Dynamic execution based on LLM decisions when plans are available
+- [ ] Full MCP server implementation (context gathered directly via RobotDriver)
+- _Status_: Implemented using Claude planning with graceful fallback; an off-process MCP server is not included.
 
 ### Optional Challenge 2 (API Deployment)
 - [x] Network-accessible REST API

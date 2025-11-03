@@ -1,66 +1,68 @@
-#!/usr/bin/env python3
-"""
-Test script for the MCP Robot Driver API
-Run this after starting the API server to verify it works
-"""
+"""Utility script to verify MCP Robot Driver API endpoints."""
 
-import requests
 import json
 import time
+from typing import Any, Callable
+
+import requests
 
 API_BASE = "http://localhost:8000"
 
-def test_api():
-    print("🧪 Testing MCP Robot Driver API")
+def _print_section(title: str) -> None:
+    print(f"\n{title}")
+    print("-" * len(title))
+
+
+def _run_request(
+    label: str,
+    method: Callable[..., requests.Response],
+    endpoint: str,
+    payload: dict[str, Any] | None = None,
+) -> None:
+    _print_section(label)
+    try:
+        if payload is not None:
+            print(f"Request payload:\n{json.dumps(payload, indent=2)}")
+            response = method(f"{API_BASE}{endpoint}", json=payload, timeout=30)
+        else:
+            response = method(f"{API_BASE}{endpoint}", timeout=30)
+        print(f"Status: {response.status_code}")
+        print(f"Response body:\n{json.dumps(response.json(), indent=2)}")
+    except Exception as exc:  # noqa: BLE001 - provide actionable debug output
+        print(f"Error during '{label}': {exc}")
+
+
+def test_api() -> None:
+    print("Testing MCP Robot Driver API")
     print("=" * 50)
-    
-    # Test 1: Root endpoint
-    print("\n1️⃣ Testing root endpoint...")
-    try:
-        response = requests.get(f"{API_BASE}/")
-        print(f"✅ Status: {response.status_code}")
-        print(f"📋 Response: {json.dumps(response.json(), indent=2)}")
-    except Exception as e:
-        print(f"❌ Error: {e}")
-        return
-    
-    # Test 2: Basic automation
-    print("\n2️⃣ Testing basic automation...")
-    try:
-        payload = {
+
+    _run_request("1) Root endpoint", requests.get, "/")
+
+    _run_request(
+        "2) Basic automation",
+        requests.post,
+        "/run-basic",
+        {
             "product_name": "iPhone 12",
             "headless": True,
-            "timeout_ms": 15000
-        }
-        
-        print(f"📤 Sending: {json.dumps(payload, indent=2)}")
-        response = requests.post(f"{API_BASE}/run-basic", json=payload)
-        print(f"✅ Status: {response.status_code}")
-        print(f"📋 Response: {json.dumps(response.json(), indent=2)}")
-        
-    except Exception as e:
-        print(f"❌ Error: {e}")
-    
-    # Test 3: AI-style automation  
-    print("\n3️⃣ Testing AI-style automation...")
-    try:
-        payload = {
+            "timeout_ms": 15_000,
+        },
+    )
+
+    _run_request(
+        "3) AI-style automation",
+        requests.post,
+        "/run-ai",
+        {
             "goal": "Find the cheapest iPhone",
-            "headless": True
-        }
-        
-        print(f"📤 Sending: {json.dumps(payload, indent=2)}")
-        response = requests.post(f"{API_BASE}/run-ai", json=payload)
-        print(f"✅ Status: {response.status_code}")
-        print(f"📋 Response: {json.dumps(response.json(), indent=2)}")
-        
-    except Exception as e:
-        print(f"❌ Error: {e}")
-    
-    print("\n🎉 API testing complete!")
-    print("\n💡 Access interactive docs at: http://localhost:8000/docs")
+            "headless": True,
+        },
+    )
+
+    print("\nAPI testing complete!")
+    print("\nAccess interactive docs at: http://localhost:8000/docs")
 
 if __name__ == "__main__":
-    print("⏳ Waiting 2 seconds for API server to be ready...")
+    print("Waiting 2 seconds for the API server to be ready...")
     time.sleep(2)
     test_api()

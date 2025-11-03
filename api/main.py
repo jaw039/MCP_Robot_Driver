@@ -1,7 +1,7 @@
 import sys
 from pathlib import Path
 from time import perf_counter
-from typing import Literal
+from typing import Any, Literal
 
 # Add parent directory to path to import robot drivers
 sys.path.append(str(Path(__file__).parent.parent))
@@ -9,6 +9,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 from fastapi import FastAPI
 from pydantic import BaseModel
 
+from ai_brain_mcp import AIBrainError, AIPlaywrightBrain
 from robot_Driver_Playwright.my_robot_driver import RobotDriver
 
 app = FastAPI(
@@ -16,6 +17,8 @@ app = FastAPI(
     description="Network-accessible service for Playwright automation",
     version="1.0.0",
 )
+
+ai_brain = AIPlaywrightBrain()
 
 # Request Models
 class BasicTaskRequest(BaseModel):
@@ -39,6 +42,8 @@ class TaskResult(BaseModel):
     approach: str
     execution_time_seconds: float | None = None
     selection_strategy: str | None = None
+    plan: dict[str, Any] | None = None
+    catalog_sample: list[dict[str, Any]] | None = None
 
 # Endpoints
 
@@ -48,7 +53,7 @@ def root():
         "message": "MCP Robot Driver API - Challenge 2 Complete!",
         "endpoints": {
             "/run-basic": "Run basic hardcoded automation (Part 1)",
-            "/run-ai": "Run AI-style automation (simulated)", 
+            "/run-ai": "Run AI-style automation (Claude with fallback)", 
             "/docs": "Interactive API documentation"
         },
         "features": [
@@ -65,7 +70,7 @@ def run_basic_driver(req: BasicTaskRequest):
     """
     Run basic hardcoded Playwright automation
     
-    Executes predefined steps: navigate → login → find product → extract price
+    Executes predefined steps: navigate -> login -> find product -> extract price
     """
     start_time = perf_counter()
 
@@ -101,47 +106,38 @@ def run_basic_driver(req: BasicTaskRequest):
 
 @app.post("/run-ai", response_model=TaskResult)
 def run_ai_driver(req: AITaskRequest):
-    """
-    Run AI-style automation (simulated)
-    
-    Demonstrates how an AI-driven endpoint would work.
-    In a full implementation, this would use Claude AI with MCP.
-    """
+    """Run AI-driven automation using Anthropic Claude with graceful fallback."""
     start_time = perf_counter()
 
     try:
-        # Parse goal to determine product and selection mode
-        goal_lower = req.goal.lower()
-        strategy: Literal["match", "min_price", "max_price"] = "match"
-
-        if "most expensive" in goal_lower or "highest" in goal_lower:
-            strategy = "max_price"
-        elif any(phrase in goal_lower for phrase in ("cheapest", "least expensive", "lowest")):
-            strategy = "min_price"
-
-        if "iphone" in goal_lower:
-            target_product = "iPhone"
-        else:
-            target_product = "iPhone 12"
-
-        driver = RobotDriver(timeout_ms=10_000)
-        result = driver.run_complete_task(
-            url=req.url,
-            product_name=target_product,
-            headless=req.headless,
-            selection_strategy=strategy,
-        )
+        execution = ai_brain.execute_goal(goal=req.goal, url=req.url, headless=req.headless)
 
         execution_time = perf_counter() - start_time
 
+        catalog_sample = [
+            {"title": item.get("title"), "price": item.get("price_text"), "price_value": item.get("price_value")}
+            for item in execution.catalog[:5]
+        ]
+
         return TaskResult(
-            success=result.success,
-            product=result.matched_product or result.requested_product,
-            price=result.price,
-            error=result.error,
-            approach="AI-guided automation (simulated)",
+            success=execution.result.success,
+            product=execution.result.matched_product or execution.result.requested_product,
+            price=execution.result.price,
+            error=execution.result.error,
+            approach="AI-guided automation (Claude with fallback)",
             execution_time_seconds=round(execution_time, 2),
-            selection_strategy=result.selection_strategy,
+            selection_strategy=execution.result.selection_strategy,
+            plan=execution.plan.to_dict(),
+            catalog_sample=catalog_sample,
+        )
+
+    except AIBrainError as brain_error:
+        execution_time = perf_counter() - start_time
+        return TaskResult(
+            success=False,
+            error=f"AI planning error: {brain_error}",
+            approach="AI-guided automation (Claude with fallback)",
+            execution_time_seconds=round(execution_time, 2)
         )
 
     except Exception as e:
@@ -149,6 +145,6 @@ def run_ai_driver(req: AITaskRequest):
         return TaskResult(
             success=False,
             error=f"API Error: {str(e)}",
-            approach="AI-guided automation (simulated)",
+            approach="AI-guided automation (Claude with fallback)",
             execution_time_seconds=round(execution_time, 2)
         )
